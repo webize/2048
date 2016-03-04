@@ -284,7 +284,54 @@ var game = window.game = {
             bestView.x = scoreView.x + bestView.getScaledWidth() + 20 >> 0;
             bestView.y = 20;
 
-            toolbar.addChild(scoreView, bestView, restartBtn);
+            //toolbar.addChild(scoreView, bestView, restartBtn);
+
+            var loginView = new Hilo.DOMElement({
+                id: 'loginView',
+                width: 70,
+                height: 45,
+                element: Hilo.createElement('div', {
+                    innerHTML: '<p class="small-text">Login</p><p id="best" class="number">'+ '⊗' +'</p>',
+                    className: 'info-box'
+                })
+
+            }).on(Hilo.event.POINTER_START, function(){
+
+              var Solid = require('solid');
+              var storage;
+              authEndpoint = 'https://databox.me/';
+              dologin();
+
+              function dologin() {
+                // Get the current user
+                Solid.auth.login(authEndpoint).then(function(webid){
+                  // authentication succeeded; do something with the WebID string
+                  alert('Success!  You are logged in as : ' + webid);
+                  localStorage.setItem('user', webid);
+
+                  Solid.identity.getProfile(webid).then(function (parsedProfile) {
+                    console.log('getProfile result: %o', parsedProfile)
+                    console.log('Account storage root: %s', parsedProfile.externalResources.storage) // array of URIs })
+                    storage = parsedProfile.externalResources.storage[0];
+                    console.log(storage);
+
+                  });
+
+                  window.user = webid;
+                }).catch(function(err) {
+                  // authentication failed; display some error message
+                  alert(err);
+                });
+              }
+
+
+            });
+            loginView.x = bestView.x + loginView.getScaledWidth() + 20 >> 0;
+            loginView.y = 20;
+
+            toolbar.addChild(scoreView, bestView, loginView, restartBtn);
+
+
         }
 
         me.stage.addChild(me.toolbar);
