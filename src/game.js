@@ -70,7 +70,7 @@ var game = window.game = {
             className: 'hilo-info',
             style:{
                 position: 'absolute',
-                top: (me.height - 20) + 'px',
+                top: (me.height - 60) + 'px',
                 left: (stage.viewport.left + me.width - 250) + 'px'
             }
         }));
