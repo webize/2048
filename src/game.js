@@ -575,22 +575,32 @@ var game = window.game = {
 
             var solid = require('solid')
             var url = 'https://games.databox.me/Public/2048.ttl'
-            solid.web.get(url).then(
-              function(response) {
+
+            solid.web.getParsedGraph(url).then(
+              function(graphed) {
                 if (!localStorage.user) return;
 
-                console.log('Raw resource: %s', response.raw())
-                alert('Saving High Score to games.databox.me! ' + game.score);
+                var URN  = $rdf.Namespace("urn:");
 
+                var sc = graphed.statementsMatching($rdf.sym(localStorage.user), URN('score'));
 
-                var scores = $rdf.st($rdf.sym(localStorage.user), $rdf.sym('urn:score'), game.score).toNT()
+                var turtle = 'INSERT DATA { <'+(localStorage.user)+'> <urn:score>  '+ game.score +' . } \n';
 
-                solid.web.patch(url, null, scores).then(function (meta){
-                  console.log(meta.xhr.status) // HTTP 200 (OK)
-                }).catch(function(err) {
-                  console.log(err) // error object
-                  // ...
-                })
+                for (var i=0; i<sc.length; i++) {
+                  turtle += 'DELETE DATA { <'+(localStorage.user)+'> <urn:score>  '+ sc[i].object.value +' . } \n';
+                }
+
+                console.log(turtle);
+
+                patchFile(url, turtle);
+
+                function patchFile(file, data) {
+                  var xhr = new XMLHttpRequest();
+                  xhr.open('PATCH', file, false);
+                  xhr.setRequestHeader('Content-Type', 'application/sparql-update; charset=UTF-8');
+                  xhr.send(data);
+                }
+
 
               }
             ).catch(
