@@ -573,7 +573,32 @@ var game = window.game = {
 
             me.overScene.addChild(bg, msg, startBtn);
 
-            alert('Saving High Score to games.databox.me! ' + game.score);
+            var solid = require('solid')
+            var url = 'https://games.databox.me/Public/2048.ttl'
+            solid.web.get(url).then(
+              function(response) {
+                if (!localStorage.user) return;
+
+                console.log('Raw resource: %s', response.raw())
+                alert('Saving High Score to games.databox.me! ' + game.score);
+
+
+                var scores = $rdf.st($rdf.sym(localStorage.user), $rdf.sym('urn:score'), game.score).toNT()
+
+                solid.web.patch(url, null, scores).then(function (meta){
+                  console.log(meta.xhr.status) // HTTP 200 (OK)
+                }).catch(function(err) {
+                  console.log(err) // error object
+                  // ...
+                })
+
+              }
+            ).catch(
+              function(err) {
+                console.log(err) // error object
+                // ...
+              }
+            )
 
         }
 
