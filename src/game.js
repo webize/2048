@@ -66,12 +66,12 @@ var game = window.game = {
 
         //Hilo水印
         document.body.appendChild(Hilo.createElement('div', {
-            innerHTML: 'Powered by <a target ="_blank" href="https://github.com/solid/solid/">Solid</a>',
+            innerHTML: 'Powered by <a target ="_blank" href="https://github.com/solid/solid/">Solid</a><br/><a target="_blank" href="https://games.databox.me/Public/2048.ttl"">High</a> Score Table',
             className: 'hilo-info',
             style:{
                 position: 'absolute',
                 top: (me.height - 20) + 'px',
-                left: (stage.viewport.left + me.width - 125) + 'px'
+                left: (stage.viewport.left + me.width - 250) + 'px'
             }
         }));
 
