@@ -66,7 +66,7 @@ var game = window.game = {
 
         //Hilo水印
         document.body.appendChild(Hilo.createElement('div', {
-            innerHTML: 'Powered by Hilo',
+            innerHTML: 'Powered by <a target ="_blank" href="https://github.com/solid/solid/">Solid</a>',
             className: 'hilo-info',
             style:{
                 position: 'absolute',
@@ -89,7 +89,7 @@ var game = window.game = {
 
     bindEvents: function(){
         //绑定交互事件
-        var me = this, stage = me.stage, 
+        var me = this, stage = me.stage,
             pointerStart = Hilo.event.POINTER_START,
             pointerEnd = Hilo.event.POINTER_END;
         stage.enableDOMEvent([pointerStart, pointerEnd], true);
@@ -163,7 +163,7 @@ var game = window.game = {
                 me.startGame();
             });
             startBtn.x = me.width - startBtn.getScaledWidth() >> 1;
-            startBtn.y = logo.y + logo.getScaledHeight() + 50 >> 0;        
+            startBtn.y = logo.y + logo.getScaledHeight() + 50 >> 0;
 
             startup.addChild(logo, startBtn);
         }
@@ -344,7 +344,7 @@ var game = window.game = {
         var isVertival = direction == 38 || direction == 40;
         var start = direction == 37 || direction == 38 ? 0 : size - 1;
         var sign = direction == 37 || direction == 38 ? 1 : -1;
-        var i, j, x, y, lastTile, tile, index, checking, doMoving = false, tweenCount = 0;        
+        var i, j, x, y, lastTile, tile, index, checking, doMoving = false, tweenCount = 0;
 
         for(i = 0; i < size; i++){
             lastTile = null;
@@ -392,7 +392,7 @@ var game = window.game = {
                             if(!--tweenCount) me.onMoveComplete(true);
                         }});
                     }
-                    
+
                     var mergeTile = tile.mergeTile;
                     if(mergeTile){
                         //移动要合并的格子
@@ -442,7 +442,7 @@ var game = window.game = {
         me.updateScore(true);
         me.makeRandomTile();
 
-        var failed = !me.moveTiles(37, true) && !me.moveTiles(38, true) &&  
+        var failed = !me.moveTiles(37, true) && !me.moveTiles(38, true) &&
                      !me.moveTiles(39, true) && !me.moveTiles(40, true);
         if(failed){
             me.showGameOver(true);
@@ -507,6 +507,8 @@ var game = window.game = {
                 })
             });
 
+
+
             var startBtn = new Hilo.DOMElement({
                 id: 'startBtn',
                 width: 200,
@@ -523,6 +525,9 @@ var game = window.game = {
             startBtn.y = msg.y + 100;
 
             me.overScene.addChild(bg, msg, startBtn);
+
+            alert('Saving High Score to games.databox.me! ' + game.score);
+
         }
 
         if(show){
