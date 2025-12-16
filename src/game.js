@@ -1,638 +1,287 @@
-(function(){
-
-var game = window.game = {
-    container: null,
-    width: 0,
-    height: 0,
-    loader: null,
-    stage: null,
-    ticker: null,
-
-    state: null, //状态
-    tileMap: null, //格子地图
-    tileCache: [], //格子缓存
-
-    maxNum: 0, //当前最大数字
-    steps: 0, //当前操作次数
-    score: 0, //当前分数
-    best: 0, //最好成绩
-    lastScore: 0, //上次的记录分数
-    moving: false, //用户是否在移动操作
-
-    init: function(config){
-        var me = this;
-
-        me.container = config.container;
-        me.width = config.width;
-        me.height = config.height;
-
-        me.loadImages();
-    },
-
-    loadImages: function(){
-        var me = this, loader = me.loader = new Hilo.LoadQueue();
-        loader.add([
-            {id:'bg', src:'images/bg.png'},
-            {id:'logo', src:'images/logo.png'},
-            {id:'restartBtn', src:'images/btn-restart.png'}
-        ]).on('complete', function(e){
-            me.initStage();
-        }).start();
-    },
-
-    initStage: function(){
-        var me = this;
-
-        //舞台
-        var stage = me.stage = new Hilo.Stage({
-            canvas: container,
-            width: me.width,
-            height: me.height
-        });
-
-        //背景
-        var bg = new Hilo.DOMElement({
-            id: 'bg',
-            width: me.width,
-            height: me.height,
-            element: Hilo.createElement('div', {
-                style: {
-                    position: 'absolute',
-                    background: 'url('+ me.loader.get('bg').src +') repeat'
-                }
-            })
-        });
-        stage.addChild(bg);
-
-        //Hilo水印
-        document.body.appendChild(Hilo.createElement('div', {
-            innerHTML: 'Powered by <a target="_blank" href="https://solidproject.org/">Solid</a>',
-            className: 'hilo-info',
-            style:{
-                position: 'absolute',
-                top: (me.height - 50) + 'px',
-                left: (stage.viewport.left + me.width - 250) + 'px'
-            }
-        }));
-
-        //启动计时器
-        var ticker = me.ticker = new Hilo.Ticker(60);
-        ticker.addTick(Hilo.Tween);
-        ticker.addTick(stage);
-        ticker.start();
-
-        me.bindEvents();
-        me.showStartup(true);
-        // me.startGame();
-        // me.showGameOver(true);
-    },
-
-    bindEvents: function(){
-        //绑定交互事件
-        var me = this, stage = me.stage,
-            pointerStart = Hilo.event.POINTER_START,
-            pointerEnd = Hilo.event.POINTER_END;
-        stage.enableDOMEvent([pointerStart, pointerEnd], true);
-        stage.on(pointerStart, me.onPointerStart.bind(me));
-        stage.on(pointerEnd, me.onPointerEnd.bind(me));
-
-        //键盘事件
-        document.addEventListener('keydown', function(e){
-            var direction = -1;
-            switch(e.keyCode){
-                case 37: //左
-                case 39: //右
-                case 38: //上
-                case 40: //下
-                direction = e.keyCode;
-                break;
-            }
-            if(direction > 0) me.moveTiles(direction);
-        });
-    },
-
-    onPointerStart: function(e){
-        var me = this;
-        var isPlay = me.state == 'play';
-        me.startX = isPlay ? e.stageX : -1;
-        me.startY = isPlay ? e.stageY :  -1;
-    },
-
-    onPointerEnd: function(e){
-        var me = this, minDelta = 2;
-        if(me.startX < 0 || me.startY < 0) return;
-        var deltaX = e.stageX - me.startX, absX = Math.abs(deltaX);
-        var deltaY = e.stageY - me.startY, absY = Math.abs(deltaY);
-        if(absX < minDelta && absY < minDelta) return;
-
-        var direction;
-        if(absX >= absY){
-            direction = deltaX > 0 ? 39 : 37;
-        }else{
-            direction = deltaY > 0 ? 40 : 38;
-        }
-        me.moveTiles(direction);
-    },
-
-    showStartup: function(show){
-        var me = this;
-
-        if(!me.startup){
-            var startup = me.startup = new Hilo.Container({
-                id: 'startup',
-                width: me.width,
-                height: me.height
-            });
-
-            var logo = new Hilo.Bitmap({
-                id: 'logo',
-                image: me.loader.get('logo').content
-            });
-            logo.x = me.width - logo.getScaledWidth() >> 1;
-            logo.y = me.height - logo.getScaledHeight() - 200 >> 1;
-
-            var startBtn = new Hilo.DOMElement({
-                id: 'startBtn',
-                width: logo.getScaledWidth() >> 0,
-                height: 45,
-                element: Hilo.createElement('div', {
-                    innerHTML: 'Start Game',
-                    className: 'btn'
-                })
-            }).on(Hilo.event.POINTER_START, function(e){
-                me.startGame();
-            });
-            startBtn.x = me.width - startBtn.getScaledWidth() >> 1;
-            startBtn.y = logo.y + logo.getScaledHeight() + 50 >> 0;
-
-            startup.addChild(logo, startBtn);
-        }
-
-        if(show){
-            me.stage.addChild(me.startup);
-        }else{
-            me.stage.removeChild(me.startup);
-        }
-    },
-
-    startGame: function(){
-        var me = this;
-
-        me.state = 'play';
-        me.showStartup(false);
-
-        //重置数据
-        me.score = 0;
-        me.lastScore = 0;
-        me.best = me.saveBestScore();
-        me.steps = 0;
-        me.maxNum = 2;
-        me.moving = false;
-        me.updateScore(false, true);
-
-        //初始化格子缓存
-        if(!me.tileCache.length) me.initTiles();
-        me.tileCache = me.tileCache.concat(me.tileMap.getAllTiles());
-        me.tileMap.reset();
-
-        //初始化格子容器
-        if(!me.tileContainer){
-            me.tileContainer = new Hilo.Container({
-                id: 'tileContainer',
-                width: me.width,
-                height: me.height
-            });
-            me.stage.addChild(me.tileContainer);
-        }
-        me.tileContainer.removeAllChildren();
-
-        //初始化顶部工具条
-        me.initToolBar();
-
-        //放置起始格子
-        var numStartTiles = 2, startTiles = [];
-        while(numStartTiles--){
-            var tile = me.tileCache.pop();
-            var pos = me.tileMap.getRandomEmptyPosition();
-            tile.setPosition(pos.x, pos.y);
-            tile.change(Tile.randomNumber(1, 2));
-            me.tileMap.set(pos.x, pos.y, tile);
-            me.tileContainer.addChild(tile);
-            me.maxNum = Math.max(me.maxNum, tile.number);
-        }
-
-        //测试数据
-        // var data = [
-        //     2, 4, 8, 16,
-        //     32, 64, 128, 256,
-        //     512, 1024, 2048, 4096,
-        //     8192, 16384, 32768, 65536
-        // ];
-        // for(var i = 0; i < data.length; i++){
-        //     if(!data[i]) continue;
-        //     var tile = me.tileCache.pop();
-        //     var x= i % 4, y = Math.floor(i / 4);
-        //     tile.setPosition(x, y);
-        //     tile.change(data[i]);
-        //     me.tileMap.set(x, y, tile);
-        //     me.stage.addChild(tile);
-        //     me.maxNum = Math.max(me.maxNum, tile.number);
-        // }
-    },
-
-    initToolBar: function(){
-        var me = this;
-        if(!me.toolbar){
-            var toolbar = me.toolbar = new Hilo.Container({
-                id: 'toolbar',
-                width: me.width,
-                height: me.height
-            });
-
-            var restartBtn = new Hilo.Bitmap({
-                id: 'restartBtn',
-                image: me.loader.get('restartBtn').content,
-                scaleX: 0.4,
-                scaleY: 0.4
-            }).on(Hilo.event.POINTER_START, function(){
-                me.startGame();
-            });
-            restartBtn.x = me.width - restartBtn.getScaledWidth() - Tile.startX >> 0;
-            restartBtn.y = 20;
-
-            var scoreView = new Hilo.DOMElement({
-                id: 'scoreView',
-                width: 70,
-                height: 45,
-                element: Hilo.createElement('div', {
-                    innerHTML: '<p class="small-text">SCORE</p><p id="score" class="number">'+ me.score +'</p>',
-                    className: 'info-box'
-                })
-            });
-            scoreView.x = Tile.startX;
-            scoreView.y = 20;
-
-            var bestView = new Hilo.DOMElement({
-                id: 'bestView',
-                width: 70,
-                height: 45,
-                element: Hilo.createElement('div', {
-                    innerHTML: '<p class="small-text">BEST</p><p id="best" class="number">'+ me.best +'</p>',
-                    className: 'info-box'
-                })
-            });
-            bestView.x = scoreView.x + bestView.getScaledWidth() + 20 >> 0;
-            bestView.y = 20;
-
-            //toolbar.addChild(scoreView, bestView, restartBtn);
-
-            var loginView = new Hilo.DOMElement({
-                id: 'loginView',
-                width: 70,
-                height: 45,
-                element: Hilo.createElement('div', {
-                    innerHTML: '<p class="small-text">Login</p><p id="best" class="number">'+ '⊗' +'</p>',
-                    className: 'info-box'
-                })
-
-            }).on(Hilo.event.POINTER_START, function(){
-              // Modern Solid OIDC login
-              if (window.SolidAuth) {
-                if (window.SolidAuth.isLoggedIn()) {
-                  alert('Already logged in as: ' + window.SolidAuth.getWebId());
-                } else {
-                  window.SolidAuth.login();
-                }
-              } else {
-                alert('Solid authentication not available');
-              }
-            });
-            loginView.x = bestView.x + loginView.getScaledWidth() + 20 >> 0;
-            loginView.y = 20;
-
-            toolbar.addChild(scoreView, bestView, loginView, restartBtn);
-
-
-        }
-
-        me.stage.addChild(me.toolbar);
-
-        me.updateScore();
-    },
-
-    initTiles: function(){
-        var me = this, margin = 20, border = 10;
-        Tile.tileGap = 8;
-        Tile.tileBorder = 10;
-        Tile.tileSize = (me.width - margin * 2 - border * 2 - Tile.tileGap * 3) >> 2;
-        Tile.tileSize = Math.min(Tile.tileSize, 65);
-        var bgSize = me.width - margin * 2;
-        Tile.tileBorder = bgSize - (Tile.tileSize * 4 + Tile.tileGap * 3) >> 1;
-
-        //格子背景
-        var ninebg = new Hilo.DOMElement({
-            id: 'ninebg',
-            width: bgSize,
-            height: bgSize,
-            alpha: 0.4,
-            element: Hilo.createElement('div', {
-                className: 'ninebg'
-            })
-        });
-        Tile.startX = ninebg.x = me.width - ninebg.getScaledWidth() >> 1;
-        Tile.startY = ninebg.y = 100;
-        me.stage.addChild(ninebg);
-
-        //初始化瓦片格子
-        var tileMap = me.tileMap = new TileMap(4, 4);
-        var numStartTiles = 2, startTiles = [];
-
-        //创建格子缓存池
-        for(var i = 0; i <= tileMap.length; i++){
-            var tile = new Tile(2, {
-                size: Tile.tileSize,
-                pivotX: Tile.tileSize * 0.5 >> 0,
-                pivotY: Tile.tileSize * 0.5 >> 0
-            });
-
-            me.tileCache.push(tile);
-        }
-    },
-
-    moveTiles: function(direction, onlyCheck){
-        var me = this;
-        if(!onlyCheck && me.moving) return;
-        if(!onlyCheck) me.moving = true;
-
-        me.lastScore = me.score;
-
-        var tileMap = me.tileMap, size = tileMap.width;
-        var matches = [], moves = [], result = [];
-
-        var isVertival = direction == 38 || direction == 40;
-        var start = direction == 37 || direction == 38 ? 0 : size - 1;
-        var sign = direction == 37 || direction == 38 ? 1 : -1;
-        var i, j, x, y, lastTile, tile, index, checking, doMoving = false, tweenCount = 0;
-
-        for(i = 0; i < size; i++){
-            lastTile = null;
-            index = 0;
-            checking = true;
-
-            for(j = 0; j < size; j++){
-                x = isVertival ? i : (start + sign * j);
-                y = isVertival ? (start + sign * j) : i;
-                tile = tileMap.get(x, y);
-
-                if(checking && tile){ //计算重排或合并
-                    if(lastTile && lastTile.number == tile.number){
-                        //预处理可以合并的相邻格子
-                        if(onlyCheck) return true;
-                        tileMap.set(tile.tileX, tile.tileY, null);
-                        me.tileCache.push(tile);
-                        lastTile.mergeTile = tile;
-                        tile.srcTile = lastTile;
-                        lastTile = null;
-                    }else{
-                        //更新格子的位置
-                        index++;
-                        lastTile = tile;
-                        var destX = isVertival ? i : start + sign * (index - 1);
-                        var destY = isVertival ? start + sign * (index- 1) : i;
-                        if(onlyCheck){
-                            if(tile.tileX != destX || tile.tileY != destY) return true;
-                        }else{
-                            tile.oldX = tile.tileX;
-                            tile.oldY = tile.tileY;
-                            tileMap.move(destX, destY, tile);
-                        }
-                    }
-                }else if(!checking && tile){//执行移动或合并
-                    var pos = Tile.getPosition(tile.tileX, tile.tileY);
-                    if(tile.tileX != tile.oldX || tile.tileY != tile.oldY){
-                        //移动格子
-                        doMoving = true;
-                        tweenCount++;
-                        Hilo.Tween.to(tile, {x:pos.x + tile.pivotX, y:pos.y + tile.pivotY}, {time:100, onComplete:function(tween){
-                            var target = tween.target;
-                            target.oldX = -1;
-                            target.oldY = -1;
-                            if(!--tweenCount) me.onMoveComplete(true);
-                        }});
-                    }
-
-                    var mergeTile = tile.mergeTile;
-                    if(mergeTile){
-                        //移动要合并的格子
-                        doMoving = true;
-                        tweenCount++;
-                        //确保移动的格子在最上层
-                        if(tile.depth > mergeTile.depth){
-                            tile.parent.swapChildren(tile, mergeTile);
-                        }
-                        Hilo.Tween.to(mergeTile, {x:pos.x + mergeTile.pivotX, y:pos.y + mergeTile.pivotY}, {time:100, onComplete:function(tween){
-                            var target = tween.target, srcTile = target.srcTile;
-                            target.removeFromParent();
-                            target.srcTile = null;
-                            srcTile.change(srcTile.number * 2);
-                            srcTile.mergeTile = null;
-                            Hilo.Tween.from(srcTile, {scaleX:0.3, scaleY:0.3}, {time:100, ease:bounce, onComplete:function(tween){
-                                if(!--tweenCount) me.onMoveComplete(true);
-                            }});
-                        }});
-                        //增加分数
-                        me.addScore(tile.number);
-                    }
-                }
-
-                //更新完一列(行)格子后，开始移动或合并格子
-                if(!onlyCheck && checking && j >= size - 1){
-                    j = -1;
-                    checking = false;
-                }
-            }
-        }
-
-        //无法移动或合并
-        if(!doMoving){
-            if(onlyCheck) return false;
-            me.onMoveComplete(false);
-        }
-        return doMoving;
-    },
-
-    onMoveComplete: function(moved){
-        var me = this;
-        me.moving = false;
-        if(!moved) return;
-
-        me.steps++;
-        me.updateScore(true);
-        me.makeRandomTile();
-
-        var failed = !me.moveTiles(37, true) && !me.moveTiles(38, true) &&
-                     !me.moveTiles(39, true) && !me.moveTiles(40, true);
-        if(failed){
-            me.showGameOver(true);
-        }
-    },
-
-    makeRandomTile: function(){
-        var me = this, tileMap = me.tileMap;
-
-        //随机获取一个空格位置
-        var position = tileMap.getRandomEmptyPosition();
-        if(!position) return false;
-
-        //随机产生2的指数幂
-        var random = Math.random();
-        var exponent = random <= 0.75 ? 1 :
-                       random > 0.75 && random <= 0.99 ? 2 : 3;
-        var randomNumber = Math.pow(2, exponent);
-
-        //复用缓存格子
-        var tile = me.tileCache.pop();
-        tile.change(randomNumber);
-        tile.setPosition(position.x, position.y);
-        tileMap.set(position.x, position.y, tile);
-        me.tileContainer.addChild(tile);
-        Hilo.Tween.from(tile, {alpha:0}, {time:100});
-
-        return true;
-    },
-
-    showGameOver: function(show){
-        var me = this;
-        if(!me.overScene){
-            me.overScene = new Hilo.Container({
-                id: 'over',
-                width: me.width,
-                height: me.height
-            });
-
-            var bg = new Hilo.DOMElement({
-                width: me.width,
-                height: me.height,
-                alpha: 0.6,
-                element: Hilo.createElement('div', {
-                    style: {
-                        position: 'absolute',
-                        background: '#000'
-                    }
-                })
-            });
-
-            var msg = new Hilo.DOMElement({
-                width: me.width,
-                height: 50,
-                y: 170,
-                element: Hilo.createElement('div', {
-                    innerHTML: 'Game Over',
-                    className: 'over',
-                    style: {
-                        position: 'absolute'
-                    }
-                })
-            });
-
-
-
-            var startBtn = new Hilo.DOMElement({
-                id: 'startBtn',
-                width: 200,
-                height: 45,
-                element: Hilo.createElement('div', {
-                    innerHTML: 'Try Again',
-                    className: 'btn'
-                })
-            }).on(Hilo.event.POINTER_START, function(e){
-                me.showGameOver(false);
-                me.startGame();
-            });
-            startBtn.x = me.width - startBtn.getScaledWidth() >> 1;
-            startBtn.y = msg.y + 100;
-
-            me.overScene.addChild(bg, msg, startBtn);
-
-            // Save high score to Solid Pod using modern API
-            if (window.SolidAuth && window.SolidAuth.isLoggedIn()) {
-              window.SolidAuth.saveScore(game.score).then(function(saved) {
-                if (saved) {
-                  console.log('High score saved to Solid Pod!');
-                }
-              }).catch(function(err) {
-                console.error('Failed to save score:', err);
-              });
-            }
-
-        }
-
-        if(show){
-            me.state = 'over';
-            me.stage.addChild(me.overScene);
-        }else{
-            me.stage.removeChild(me.overScene);
-        }
-    },
-
-    updateScore: function(animate, force){
-        var me = this, scoreElem = $('#score'), bestElem = $('#best');
-
-        var delta = me.score - me.lastScore;
-        if(scoreElem && (delta || force)){
-            if(animate){
-                var time = Math.min(400, delta*20);
-                Hilo.Tween.to({value:me.lastScore}, {value:me.score}, {time:time, onUpdate:function(){
-                    var value = this.target.value;
-                    scoreElem.innerHTML = value + 0.5 >> 0;
-                }});
-            }else{
-                scoreElem.innerHTML = me.score;
-            }
-        }
-
-        if(bestElem && (me.score > me.best || force)){
-            me.best = Math.max(me.score, me.best);
-            me.saveBestScore();
-            bestElem.innerHTML = me.best;
-        }
-    },
-
-    addScore: function(number){
-        var me = this;
-        me.score += number;
-        me.maxNum = Math.max(me.maxNum, number);
-    },
-
-    saveBestScore: function(){
-        var score = this.score, best = 0;
-        var canStore = Hilo.browser.supportStorage;
-        var key = 'hilo-2048-best-score';
-
-        if(canStore) best = parseInt(localStorage.getItem(key)) || 0;
-        if(score > best){
-            best = score;
-            if(canStore) localStorage.setItem(key, score);
-        }
-        return best;
-    }
-
-};
-
-function bounce(k){
-    if(( k /= 1) < 0.3636){
-        return 7.5625 * k * k;
-    }else if(k < 0.7273){
-        return 7.5625 * (k -= 0.5455) * k + 0.75;
-    }else if(k < 0.9091){
-        return 7.5625 * (k -= 0.8182) * k + 0.9375;
-    }else{
-        return 7.5625 * (k -= 0.9545) * k + 0.984375;
-    }
+/**
+ * Modern 2048 Game with Solid Integration
+ */
+
+import { initSolidAuth, solidLogin, solidLogout, getLoginState, saveHighScore } from './solid-auth.js'
+
+// Game state
+const GRID_SIZE = 4
+let grid = []
+let score = 0
+let best = parseInt(localStorage.getItem('2048-best')) || 0
+let gameOver = false
+let won = false
+
+// DOM elements
+const tileContainer = document.getElementById('tile-container')
+const scoreEl = document.getElementById('score')
+const bestEl = document.getElementById('best')
+const gameMessage = document.getElementById('game-message')
+const messageText = gameMessage.querySelector('p')
+const newGameBtn = document.getElementById('new-game')
+const retryBtn = document.getElementById('retry-btn')
+const loginBtn = document.getElementById('login-btn')
+const loginText = document.getElementById('login-text')
+
+// Tile size calculation
+let tileSize = 0
+let tileGap = 10
+
+function calculateTileSize() {
+  const containerWidth = tileContainer.offsetWidth
+  tileSize = (containerWidth - tileGap * 3) / 4
 }
 
-function $(selector){
-    return document.querySelector(selector);
+// Initialize game
+function init() {
+  calculateTileSize()
+  window.addEventListener('resize', () => {
+    calculateTileSize()
+    render()
+  })
+
+  // Event listeners
+  newGameBtn.addEventListener('click', newGame)
+  retryBtn.addEventListener('click', newGame)
+  loginBtn.addEventListener('click', handleLogin)
+
+  // Keyboard controls
+  document.addEventListener('keydown', handleKeyDown)
+
+  // Touch controls
+  let touchStartX, touchStartY
+  document.addEventListener('touchstart', e => {
+    touchStartX = e.touches[0].clientX
+    touchStartY = e.touches[0].clientY
+  }, { passive: true })
+
+  document.addEventListener('touchend', e => {
+    if (!touchStartX || !touchStartY) return
+
+    const deltaX = e.changedTouches[0].clientX - touchStartX
+    const deltaY = e.changedTouches[0].clientY - touchStartY
+    const absX = Math.abs(deltaX)
+    const absY = Math.abs(deltaY)
+
+    if (Math.max(absX, absY) < 30) return
+
+    if (absX > absY) {
+      move(deltaX > 0 ? 'right' : 'left')
+    } else {
+      move(deltaY > 0 ? 'down' : 'up')
+    }
+
+    touchStartX = null
+    touchStartY = null
+  }, { passive: true })
+
+  // Initialize Solid auth
+  initSolidAuth().then(({ isLoggedIn, webId }) => {
+    if (isLoggedIn) {
+      loginText.textContent = 'Logged In ✓'
+      loginBtn.classList.add('logged-in')
+    }
+  })
+
+  // Start game
+  bestEl.textContent = best
+  newGame()
 }
 
-})();
+function newGame() {
+  grid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(0))
+  score = 0
+  gameOver = false
+  won = false
+
+  scoreEl.textContent = score
+  gameMessage.classList.remove('active')
+  tileContainer.innerHTML = ''
+
+  addRandomTile()
+  addRandomTile()
+  render()
+}
+
+function addRandomTile() {
+  const empty = []
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      if (grid[r][c] === 0) empty.push({ r, c })
+    }
+  }
+
+  if (empty.length === 0) return false
+
+  const { r, c } = empty[Math.floor(Math.random() * empty.length)]
+  grid[r][c] = Math.random() < 0.9 ? 2 : 4
+  return true
+}
+
+function render() {
+  tileContainer.innerHTML = ''
+  calculateTileSize()
+
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      const value = grid[r][c]
+      if (value === 0) continue
+
+      const tile = document.createElement('div')
+      tile.className = `tile tile-${value > 2048 ? 'super' : value}`
+      tile.textContent = value
+      tile.style.width = `${tileSize}px`
+      tile.style.height = `${tileSize}px`
+      tile.style.left = `${c * (tileSize + tileGap)}px`
+      tile.style.top = `${r * (tileSize + tileGap)}px`
+
+      tileContainer.appendChild(tile)
+    }
+  }
+}
+
+function handleKeyDown(e) {
+  if (gameOver) return
+
+  const keyMap = {
+    ArrowUp: 'up',
+    ArrowDown: 'down',
+    ArrowLeft: 'left',
+    ArrowRight: 'right',
+    w: 'up', W: 'up',
+    s: 'down', S: 'down',
+    a: 'left', A: 'left',
+    d: 'right', D: 'right'
+  }
+
+  const direction = keyMap[e.key]
+  if (direction) {
+    e.preventDefault()
+    move(direction)
+  }
+}
+
+function move(direction) {
+  if (gameOver) return
+
+  const oldGrid = grid.map(row => [...row])
+  let moved = false
+
+  // Rotate grid so we always process left-to-right
+  const rotations = { up: 1, right: 2, down: 3, left: 0 }
+  const times = rotations[direction]
+
+  for (let i = 0; i < times; i++) rotateGrid()
+
+  // Process each row
+  for (let r = 0; r < GRID_SIZE; r++) {
+    const row = grid[r].filter(v => v !== 0)
+    const newRow = []
+
+    for (let i = 0; i < row.length; i++) {
+      if (i < row.length - 1 && row[i] === row[i + 1]) {
+        const merged = row[i] * 2
+        newRow.push(merged)
+        score += merged
+        if (merged === 2048 && !won) {
+          won = true
+        }
+        i++
+      } else {
+        newRow.push(row[i])
+      }
+    }
+
+    while (newRow.length < GRID_SIZE) newRow.push(0)
+    grid[r] = newRow
+  }
+
+  // Rotate back
+  for (let i = 0; i < (4 - times) % 4; i++) rotateGrid()
+
+  // Check if anything moved
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      if (grid[r][c] !== oldGrid[r][c]) moved = true
+    }
+  }
+
+  if (moved) {
+    addRandomTile()
+    render()
+    updateScore()
+
+    if (!canMove()) {
+      endGame()
+    }
+  }
+}
+
+function rotateGrid() {
+  const newGrid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(0))
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      newGrid[c][GRID_SIZE - 1 - r] = grid[r][c]
+    }
+  }
+  grid = newGrid
+}
+
+function canMove() {
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      if (grid[r][c] === 0) return true
+    }
+  }
+
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      const val = grid[r][c]
+      if (r < GRID_SIZE - 1 && grid[r + 1][c] === val) return true
+      if (c < GRID_SIZE - 1 && grid[r][c + 1] === val) return true
+    }
+  }
+
+  return false
+}
+
+function updateScore() {
+  scoreEl.textContent = score
+
+  if (score > best) {
+    best = score
+    bestEl.textContent = best
+    localStorage.setItem('2048-best', best)
+  }
+}
+
+function endGame() {
+  gameOver = true
+  messageText.textContent = won ? 'You Win!' : 'Game Over!'
+  gameMessage.classList.add('active')
+
+  const { isLoggedIn } = getLoginState()
+  if (isLoggedIn) {
+    saveHighScore(score).then(saved => {
+      if (saved) console.log('Score saved to Solid Pod!')
+    })
+  }
+}
+
+async function handleLogin() {
+  const { isLoggedIn } = getLoginState()
+
+  if (isLoggedIn) {
+    await solidLogout()
+    loginText.textContent = 'Login with Solid'
+    loginBtn.classList.remove('logged-in')
+    window.location.reload()
+  } else {
+    const idp = prompt('Enter your Solid Identity Provider:', 'https://login.inrupt.com')
+    if (idp) {
+      await solidLogin(idp)
+    }
+  }
+}
+
+init()

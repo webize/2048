@@ -1,53 +1,72 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <title>2048 - Solid Edition</title>
   <meta charset="utf-8">
-  <meta name="viewport" content="user-scalable=no, initial-scale=1.0, minimum-scale=1, maximum-scale=1">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>2048 - Solid Edition</title>
   <link rel="apple-touch-icon" href="images/icon.png">
-  <link rel="apple-touch-startup-image" href="images/icon.png">
-  <link rel="stylesheet" href="css/style.css">
-
-  <style>
-    body, div, canvas {
-      image-rendering: optimizeSpeed;
-      -webkit-image-rendering: optimizeSpeed;
-      -webkit-interpolation-mode: nearest-neighbor;
-    }
-    body { padding: 0; margin: 0; font-size: 12px; background-color: #fff; }
-    body, html { height: 100%; }
-    #outer { height: 100%; overflow: hidden; position: relative; width: 100%; }
-    #outer[id] { display: table; position: static; }
-    #middle { position: absolute; top: 50%; }
-    #middle[id] { display: table-cell; vertical-align: middle; position: static; }
-    #container { position: relative; width: 2000px; height: 1000px; top: -50%; margin: 0 auto; }
-    #msg { text-align: center; margin-top: 50%; }
-    #fps { position: absolute; top: 0; left: 0; color: #000; }
-  </style>
-
-  <!-- Game Engine -->
-  <script src="js/1.0.0/hilo-standalone.js"></script>
-
-  <!-- Game Logic -->
-  <script src="src/tile.js"></script>
-  <script src="src/tilemap.js"></script>
-  <script src="src/game.js"></script>
-  <script src="src/app.js"></script>
-
-  <!-- Modern Solid Integration (ES Module) -->
-  <script type="module" src="/src/main.js"></script>
+  <link rel="icon" href="images/icon.png">
+  <link rel="stylesheet" href="css/game.css">
 </head>
-
 <body>
-  <div id="outer">
-    <div id="middle">
-      <div id="container">
-        <div id="msg">Loading...</div>
+  <div class="container">
+    <header>
+      <h1>2048</h1>
+      <div class="scores">
+        <div class="score-box">
+          <span class="label">Score</span>
+          <span id="score" class="value">0</span>
+        </div>
+        <div class="score-box">
+          <span class="label">Best</span>
+          <span id="best" class="value">0</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="controls">
+      <button id="new-game" class="btn">New Game</button>
+      <button id="login-btn" class="btn btn-solid">
+        <span id="login-text">Login with Solid</span>
+      </button>
+    </div>
+
+    <div class="game-container">
+      <div class="grid-background">
+        <div class="grid-cell"></div>
+        <div class="grid-cell"></div>
+        <div class="grid-cell"></div>
+        <div class="grid-cell"></div>
+        <div class="grid-cell"></div>
+        <div class="grid-cell"></div>
+        <div class="grid-cell"></div>
+        <div class="grid-cell"></div>
+        <div class="grid-cell"></div>
+        <div class="grid-cell"></div>
+        <div class="grid-cell"></div>
+        <div class="grid-cell"></div>
+        <div class="grid-cell"></div>
+        <div class="grid-cell"></div>
+        <div class="grid-cell"></div>
+        <div class="grid-cell"></div>
+      </div>
+      <div id="tile-container" class="tile-container"></div>
+      <div id="game-message" class="game-message">
+        <p></p>
+        <button id="retry-btn" class="btn">Try Again</button>
       </div>
     </div>
+
+    <p class="instructions">
+      <strong>How to play:</strong> Use arrow keys or swipe to move tiles.
+      When two tiles with the same number touch, they merge into one!
+    </p>
+
+    <footer>
+      Powered by <a href="https://solidproject.org/" target="_blank">Solid</a>
+    </footer>
   </div>
-  <div id="fps"></div>
+
+  <script type="module" src="/src/game.js"></script>
 </body>
 </html>
