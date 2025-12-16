@@ -12,29 +12,35 @@ let best = parseInt(localStorage.getItem('2048-best')) || 0
 let gameOver = false
 let won = false
 
-// DOM elements
-const tileContainer = document.getElementById('tile-container')
-const scoreEl = document.getElementById('score')
-const bestEl = document.getElementById('best')
-const gameMessage = document.getElementById('game-message')
-const messageText = gameMessage.querySelector('p')
-const newGameBtn = document.getElementById('new-game')
-const retryBtn = document.getElementById('retry-btn')
-const loginBtn = document.getElementById('login-btn')
-const loginText = document.getElementById('login-text')
+// DOM elements (initialized in init)
+let tileContainer, scoreEl, bestEl, gameMessage, messageText
+let newGameBtn, retryBtn, loginBtn, loginText
 
 // Tile size calculation
 let tileSize = 0
-let tileGap = 10
+const tileGap = 10
 
 function calculateTileSize() {
+  if (!tileContainer) return
   const containerWidth = tileContainer.offsetWidth
   tileSize = (containerWidth - tileGap * 3) / 4
 }
 
 // Initialize game
 function init() {
+  // Get DOM elements
+  tileContainer = document.getElementById('tile-container')
+  scoreEl = document.getElementById('score')
+  bestEl = document.getElementById('best')
+  gameMessage = document.getElementById('game-message')
+  messageText = gameMessage.querySelector('p')
+  newGameBtn = document.getElementById('new-game')
+  retryBtn = document.getElementById('retry-btn')
+  loginBtn = document.getElementById('login-btn')
+  loginText = document.getElementById('login-text')
+
   calculateTileSize()
+
   window.addEventListener('resize', () => {
     calculateTileSize()
     render()
@@ -81,6 +87,8 @@ function init() {
       loginText.textContent = 'Logged In ✓'
       loginBtn.classList.add('logged-in')
     }
+  }).catch(err => {
+    console.log('Solid auth not available:', err.message)
   })
 
   // Start game
@@ -119,6 +127,7 @@ function addRandomTile() {
 }
 
 function render() {
+  if (!tileContainer) return
   tileContainer.innerHTML = ''
   calculateTileSize()
 
@@ -167,13 +176,11 @@ function move(direction) {
   const oldGrid = grid.map(row => [...row])
   let moved = false
 
-  // Rotate grid so we always process left-to-right
   const rotations = { up: 1, right: 2, down: 3, left: 0 }
   const times = rotations[direction]
 
   for (let i = 0; i < times; i++) rotateGrid()
 
-  // Process each row
   for (let r = 0; r < GRID_SIZE; r++) {
     const row = grid[r].filter(v => v !== 0)
     const newRow = []
@@ -196,10 +203,8 @@ function move(direction) {
     grid[r] = newRow
   }
 
-  // Rotate back
   for (let i = 0; i < (4 - times) % 4; i++) rotateGrid()
 
-  // Check if anything moved
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
       if (grid[r][c] !== oldGrid[r][c]) moved = true
@@ -284,4 +289,9 @@ async function handleLogin() {
   }
 }
 
-init()
+// Start when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init)
+} else {
+  init()
+}
