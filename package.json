@@ -1,0 +1,30 @@
+{
+  "name": "solid-2048",
+  "version": "2.0.0",
+  "description": "2048 tile game with Solid integration for decentralized high scores",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@inrupt/solid-client": "^2.1.0",
+    "@inrupt/solid-client-authn-browser": "^2.3.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.3"
+  },
+  "keywords": [
+    "solid",
+    "2048",
+    "game",
+    "decentralized",
+    "linked-data"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/webize/2048"
+  }
+}
