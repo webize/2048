@@ -1,8 +1,6 @@
 /**
- * Modern 2048 Game with Solid Integration
+ * Modern 2048 Game - Works standalone, Solid integration optional
  */
-
-import { initSolidAuth, solidLogin, solidLogout, getLoginState, saveHighScore } from './solid-auth.js'
 
 // Game state
 const GRID_SIZE = 4
@@ -15,6 +13,9 @@ let won = false
 // DOM elements (initialized in init)
 let tileContainer, scoreEl, bestEl, gameMessage, messageText
 let newGameBtn, retryBtn, loginBtn, loginText
+
+// Solid auth (loaded dynamically)
+let solidAuth = null
 
 // Tile size calculation
 let tileSize = 0
@@ -81,19 +82,26 @@ function init() {
     touchStartY = null
   }, { passive: true })
 
-  // Initialize Solid auth
-  initSolidAuth().then(({ isLoggedIn, webId }) => {
+  // Load Solid auth dynamically (optional)
+  loadSolidAuth()
+
+  // Start game immediately
+  bestEl.textContent = best
+  newGame()
+}
+
+async function loadSolidAuth() {
+  try {
+    solidAuth = await import('./solid-auth.js')
+    const { isLoggedIn } = await solidAuth.initSolidAuth()
     if (isLoggedIn) {
       loginText.textContent = 'Logged In ✓'
       loginBtn.classList.add('logged-in')
     }
-  }).catch(err => {
+  } catch (err) {
     console.log('Solid auth not available:', err.message)
-  })
-
-  // Start game
-  bestEl.textContent = best
-  newGame()
+    // Game works fine without Solid
+  }
 }
 
 function newGame() {
@@ -265,26 +273,34 @@ function endGame() {
   messageText.textContent = won ? 'You Win!' : 'Game Over!'
   gameMessage.classList.add('active')
 
-  const { isLoggedIn } = getLoginState()
-  if (isLoggedIn) {
-    saveHighScore(score).then(saved => {
-      if (saved) console.log('Score saved to Solid Pod!')
-    })
+  // Save to Solid if available
+  if (solidAuth) {
+    const { isLoggedIn } = solidAuth.getLoginState()
+    if (isLoggedIn) {
+      solidAuth.saveHighScore(score).then(saved => {
+        if (saved) console.log('Score saved to Solid Pod!')
+      })
+    }
   }
 }
 
 async function handleLogin() {
-  const { isLoggedIn } = getLoginState()
+  if (!solidAuth) {
+    alert('Solid authentication is not available. You can still play the game!')
+    return
+  }
+
+  const { isLoggedIn } = solidAuth.getLoginState()
 
   if (isLoggedIn) {
-    await solidLogout()
+    await solidAuth.solidLogout()
     loginText.textContent = 'Login with Solid'
     loginBtn.classList.remove('logged-in')
     window.location.reload()
   } else {
     const idp = prompt('Enter your Solid Identity Provider:', 'https://login.inrupt.com')
     if (idp) {
-      await solidLogin(idp)
+      await solidAuth.solidLogin(idp)
     }
   }
 }
