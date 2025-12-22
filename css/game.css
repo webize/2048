@@ -133,18 +133,22 @@ h1 {
   align-items: center;
   font-weight: bold;
   border-radius: 6px;
-  transition: top 0.15s ease-in-out, left 0.15s ease-in-out;
-  animation: pop 0.2s ease-in-out;
+  transition: top 150ms ease-in-out, left 150ms ease-in-out;
+}
+
+.tile-new {
+  animation: pop 200ms ease-in-out;
 }
 
 @keyframes pop {
-  0% { transform: scale(0); }
+  0% { transform: scale(0); opacity: 0; }
   50% { transform: scale(1.1); }
-  100% { transform: scale(1); }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 .tile-merged {
-  animation: merge 0.2s ease-in-out;
+  animation: merge 150ms ease-in-out;
+  z-index: 10;
 }
 
 @keyframes merge {

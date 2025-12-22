@@ -9,6 +9,11 @@ let score = 0
 let best = parseInt(localStorage.getItem('2048-best')) || 0
 let gameOver = false
 let won = false
+let isAnimating = false
+
+// Tile tracking
+let tileIdCounter = 0
+let tiles = new Map() // id -> { element, row, col, value }
 
 // DOM elements (initialized in init)
 let tileContainer, scoreEl, bestEl, gameMessage, messageText
@@ -20,6 +25,7 @@ let solidAuth = null
 // Tile size calculation
 let tileSize = 0
 const tileGap = 10
+const ANIMATION_DURATION = 150 // ms
 
 function calculateTileSize() {
   if (!tileContainer) return
@@ -42,10 +48,7 @@ function init() {
 
   calculateTileSize()
 
-  window.addEventListener('resize', () => {
-    calculateTileSize()
-    render()
-  })
+  window.addEventListener('resize', refreshAllTilePositions)
 
   // Event listeners
   newGameBtn.addEventListener('click', newGame)
@@ -105,56 +108,84 @@ async function loadSolidAuth() {
 }
 
 function newGame() {
-  grid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(0))
+  // Clear existing tiles
+  tiles.forEach(tile => tile.element.remove())
+  tiles.clear()
+  tileIdCounter = 0
+
+  grid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null))
   score = 0
   gameOver = false
   won = false
+  isAnimating = false
 
   scoreEl.textContent = score
   gameMessage.classList.remove('active')
-  tileContainer.innerHTML = ''
 
   addRandomTile()
   addRandomTile()
-  render()
 }
 
 function addRandomTile() {
   const empty = []
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
-      if (grid[r][c] === 0) empty.push({ r, c })
+      if (grid[r][c] === null) empty.push({ r, c })
     }
   }
 
   if (empty.length === 0) return false
 
   const { r, c } = empty[Math.floor(Math.random() * empty.length)]
-  grid[r][c] = Math.random() < 0.9 ? 2 : 4
+  const value = Math.random() < 0.9 ? 2 : 4
+  const id = ++tileIdCounter
+
+  // Create tile object
+  const tile = { id, value, row: r, col: c, element: null }
+  grid[r][c] = tile
+  tiles.set(id, tile)
+
+  // Create DOM element
+  createTileElement(tile, true)
   return true
 }
 
-function render() {
-  if (!tileContainer) return
-  tileContainer.innerHTML = ''
+function createTileElement(tile, isNew = false) {
   calculateTileSize()
+  const el = document.createElement('div')
+  el.className = `tile tile-${tile.value > 2048 ? 'super' : tile.value}`
+  if (isNew) el.classList.add('tile-new')
+  el.textContent = tile.value
+  el.style.width = `${tileSize}px`
+  el.style.height = `${tileSize}px`
+  el.style.left = `${tile.col * (tileSize + tileGap)}px`
+  el.style.top = `${tile.row * (tileSize + tileGap)}px`
+  tileContainer.appendChild(el)
+  tile.element = el
+}
 
-  for (let r = 0; r < GRID_SIZE; r++) {
-    for (let c = 0; c < GRID_SIZE; c++) {
-      const value = grid[r][c]
-      if (value === 0) continue
+function updateTilePosition(tile) {
+  calculateTileSize()
+  tile.element.style.left = `${tile.col * (tileSize + tileGap)}px`
+  tile.element.style.top = `${tile.row * (tileSize + tileGap)}px`
+}
 
-      const tile = document.createElement('div')
-      tile.className = `tile tile-${value > 2048 ? 'super' : value}`
-      tile.textContent = value
-      tile.style.width = `${tileSize}px`
-      tile.style.height = `${tileSize}px`
-      tile.style.left = `${c * (tileSize + tileGap)}px`
-      tile.style.top = `${r * (tileSize + tileGap)}px`
+function updateTileValue(tile, newValue) {
+  tile.value = newValue
+  tile.element.textContent = newValue
+  tile.element.className = `tile tile-${newValue > 2048 ? 'super' : newValue}`
+  tile.element.classList.add('tile-merged')
+  setTimeout(() => tile.element.classList.remove('tile-merged'), ANIMATION_DURATION)
+}
 
-      tileContainer.appendChild(tile)
-    }
-  }
+function refreshAllTilePositions() {
+  calculateTileSize()
+  tiles.forEach(tile => {
+    tile.element.style.width = `${tileSize}px`
+    tile.element.style.height = `${tileSize}px`
+    tile.element.style.left = `${tile.col * (tileSize + tileGap)}px`
+    tile.element.style.top = `${tile.row * (tileSize + tileGap)}px`
+  })
 }
 
 function handleKeyDown(e) {
@@ -179,79 +210,137 @@ function handleKeyDown(e) {
 }
 
 function move(direction) {
-  if (gameOver) return
+  if (gameOver || isAnimating) return
 
-  const oldGrid = grid.map(row => [...row])
   let moved = false
+  const merges = [] // { survivor, consumed, newValue }
+  const tilesToRemove = []
 
-  const rotations = { up: 3, right: 2, down: 1, left: 0 }
-  const times = rotations[direction]
+  // Get traversal order based on direction
+  const vectors = {
+    up: { dr: -1, dc: 0 },
+    down: { dr: 1, dc: 0 },
+    left: { dr: 0, dc: -1 },
+    right: { dr: 0, dc: 1 }
+  }
+  const { dr, dc } = vectors[direction]
 
-  for (let i = 0; i < times; i++) rotateGrid()
+  // Process tiles in correct order
+  const rows = [...Array(GRID_SIZE).keys()]
+  const cols = [...Array(GRID_SIZE).keys()]
+  if (dr === 1) rows.reverse() // down: start from bottom
+  if (dc === 1) cols.reverse() // right: start from right
 
-  for (let r = 0; r < GRID_SIZE; r++) {
-    const row = grid[r].filter(v => v !== 0)
-    const newRow = []
+  // Track which cells have already received a merge this move
+  const mergedThisMove = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false))
 
-    for (let i = 0; i < row.length; i++) {
-      if (i < row.length - 1 && row[i] === row[i + 1]) {
-        const merged = row[i] * 2
-        newRow.push(merged)
-        score += merged
-        if (merged === 2048 && !won) {
-          won = true
+  for (const r of rows) {
+    for (const c of cols) {
+      const tile = grid[r][c]
+      if (!tile) continue
+
+      // Find farthest position
+      let newR = r
+      let newC = c
+
+      while (true) {
+        const nextR = newR + dr
+        const nextC = newC + dc
+
+        if (nextR < 0 || nextR >= GRID_SIZE || nextC < 0 || nextC >= GRID_SIZE) break
+
+        const nextTile = grid[nextR][nextC]
+
+        if (nextTile === null) {
+          // Empty cell, can move there
+          newR = nextR
+          newC = nextC
+        } else if (nextTile.value === tile.value && !mergedThisMove[nextR][nextC]) {
+          // Can merge
+          newR = nextR
+          newC = nextC
+          break
+        } else {
+          // Blocked by different tile or already merged
+          break
         }
-        i++
-      } else {
-        newRow.push(row[i])
+      }
+
+      if (newR !== r || newC !== c) {
+        moved = true
+        const targetTile = grid[newR][newC]
+
+        // Clear old position
+        grid[r][c] = null
+
+        if (targetTile) {
+          // Merge
+          const newValue = tile.value * 2
+          merges.push({ survivor: targetTile, consumed: tile, newValue })
+          mergedThisMove[newR][newC] = true
+          score += newValue
+          if (newValue === 2048 && !won) won = true
+        } else {
+          // Just move
+          grid[newR][newC] = tile
+          tile.row = newR
+          tile.col = newC
+          updateTilePosition(tile)
+        }
       }
     }
-
-    while (newRow.length < GRID_SIZE) newRow.push(0)
-    grid[r] = newRow
   }
 
-  for (let i = 0; i < (4 - times) % 4; i++) rotateGrid()
+  // Process merges after all movements calculated
+  for (const { survivor, consumed, newValue } of merges) {
+    // Move consumed tile to merge position, then remove after animation
+    consumed.row = survivor.row
+    consumed.col = survivor.col
+    updateTilePosition(consumed)
+    tilesToRemove.push(consumed)
 
-  for (let r = 0; r < GRID_SIZE; r++) {
-    for (let c = 0; c < GRID_SIZE; c++) {
-      if (grid[r][c] !== oldGrid[r][c]) moved = true
+    // Update survivor after animation
+    setTimeout(() => {
+      updateTileValue(survivor, newValue)
+    }, ANIMATION_DURATION)
+  }
+
+  // Remove consumed tiles after animation
+  setTimeout(() => {
+    for (const tile of tilesToRemove) {
+      tile.element.remove()
+      tiles.delete(tile.id)
     }
-  }
+  }, ANIMATION_DURATION)
 
   if (moved) {
-    addRandomTile()
-    render()
-    updateScore()
-
-    if (!canMove()) {
-      endGame()
-    }
+    isAnimating = true
+    // Add new tile after animation completes
+    setTimeout(() => {
+      addRandomTile()
+      updateScore()
+      isAnimating = false
+      if (!canMove()) {
+        endGame()
+      }
+    }, ANIMATION_DURATION)
   }
-}
-
-function rotateGrid() {
-  const newGrid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(0))
-  for (let r = 0; r < GRID_SIZE; r++) {
-    for (let c = 0; c < GRID_SIZE; c++) {
-      newGrid[c][GRID_SIZE - 1 - r] = grid[r][c]
-    }
-  }
-  grid = newGrid
 }
 
 function canMove() {
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
-      if (grid[r][c] === 0) return true
+      if (grid[r][c] === null) return true
     }
   }
 
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
-      const val = grid[r][c]
-      if (r < GRID_SIZE - 1 && grid[r + 1][c] === val) return true
-      if (c < GRID_SIZE - 1 && grid[r][c + 1] === val) return true
+      const tile = grid[r][c]
+      if (!tile) continue
+      const val = tile.value
+      if (r < GRID_SIZE - 1 && grid[r + 1][c]?.value === val) return true
+      if (c < GRID_SIZE - 1 && grid[r][c + 1]?.value === val) return true
     }
   }
 
