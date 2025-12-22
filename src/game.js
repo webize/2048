@@ -184,7 +184,7 @@ function move(direction) {
   const oldGrid = grid.map(row => [...row])
   let moved = false
 
-  const rotations = { up: 1, right: 2, down: 3, left: 0 }
+  const rotations = { up: 3, right: 2, down: 1, left: 0 }
   const times = rotations[direction]
 
   for (let i = 0; i < times; i++) rotateGrid()
