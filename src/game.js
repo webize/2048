@@ -88,9 +88,11 @@ function init() {
   // Load Solid auth dynamically (optional)
   loadSolidAuth()
 
-  // Start game immediately
+  // Start game after layout is complete
   bestEl.textContent = best
-  newGame()
+  requestAnimationFrame(() => {
+    requestAnimationFrame(newGame)
+  })
 }
 
 async function loadSolidAuth() {
